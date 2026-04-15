@@ -87,6 +87,27 @@ if os.path.exists(ann_path):
                 if field in ann:
                     tables[key][field] = ann[field]
 
+# ── Load column derivations (gold tables) ────────────────────────────────────
+deriv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "derivations.json")
+if os.path.exists(deriv_path):
+    with open(deriv_path, "r", encoding="utf-8") as f:
+        deriv_data = json.load(f)
+    for key, deriv in deriv_data.items():
+        if key in tables:
+            # Extract table-level model metadata
+            model_meta = {}
+            for mk in ("_model", "_sources", "_join_strategy"):
+                if mk in deriv:
+                    model_meta[mk] = deriv[mk]
+            tables[key]["model_meta"] = model_meta
+            # Build per-column derivation map
+            col_derivations = {}
+            for col_name, col_info in deriv.items():
+                if col_name.startswith("_"):
+                    continue
+                col_derivations[col_name] = col_info
+            tables[key]["column_derivations"] = col_derivations
+
 # ── Build output ──────────────────────────────────────────────────────────────
 db_summary = {}
 for db in DATABASES:

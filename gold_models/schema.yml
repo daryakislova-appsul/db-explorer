@@ -1,0 +1,517 @@
+version: 2
+
+models:
+  - name: gold__ua_cohort_users
+    description: >
+      User-level cohort base built from `silver__users_scd2`. One row represents one
+      install lifetime of one user inside one app, not one `client_id` for all time.
+      The model is the entry point of the UA cohort pipeline: every new install or
+      reinstall/reattribution lifetime creates a new cohort membership.
+    columns:
+      - name: cohort_date
+        description: "Cohort date derived from install_date of the lifetime."
+      - name: cohort_month
+        description: "Month bucket of cohort_date."
+      - name: cohort_week
+        description: "Week bucket of cohort_date."
+      - name: platform
+        description: "Normalized platform derived from the lifetime start event."
+      - name: country
+        description: "Country from the lifetime start event."
+      - name: media_source
+        description: "Media source from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign id from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name from the lifetime start event."
+      - name: adset
+        description: "Adset name from the lifetime start event."
+      - name: install_device_name
+        description: "Adjust device name from the install/reinstall event that opened the lifetime."
+      - name: install_device_type
+        description: "Adjust device type from the install/reinstall event that opened the lifetime."
+      - name: application
+        description: "Application name."
+      - name: client_id
+        description: "Adjust client identifier."
+      - name: user_lifetime_id
+        description: "Lifetime key from silver__users_scd2. This is the true install grain for cohort logic."
+      - name: user_lifetime_number
+        description: "Sequential lifetime number within (application, client_id)."
+      - name: lifetime_start_date
+        description: "Install date that opened the lifetime and assigned the cohort."
+      - name: lifetime_end_date
+        description: "Date when the next lifetime starts for the same client_id. Null means the cohort lifetime is still open."
+
+  - name: gold__ua_user_lifetime_activity_daily
+    description: >
+      Reusable user-lifetime daily fact at grain
+      (`application`, `client_id`, `user_lifetime_id`, `event_date`). It matches one
+      install lifetime to daily session activity, in-app purchases/refunds,
+      subscription purchases/refunds, cancellation signals, and Applovin ad revenue.
+      The model is the shared upstream for `gold__ua_cohort_long` and
+      `gold__ua_cohort_activity_utn`.
+    columns:
+      - name: cohort_date
+        description: "Install cohort date of the lifetime."
+      - name: cohort_month
+        description: "Month bucket derived from cohort_date."
+      - name: cohort_week
+        description: "Week bucket derived from cohort_date."
+      - name: event_date
+        description: "UTC date of the user-level daily fact."
+      - name: day_idx
+        description: "Day offset between cohort_date and event_date."
+      - name: platform
+        description: "Normalized platform for the lifetime."
+      - name: application
+        description: "Application name."
+      - name: country
+        description: "Country assigned from the lifetime start event."
+      - name: media_source
+        description: "Attribution media source assigned from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name assigned from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign identifier assigned from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name assigned from the lifetime start event."
+      - name: adset
+        description: "Adset name assigned from the lifetime start event."
+      - name: install_device_name
+        description: "Adjust device name assigned from the lifetime start event."
+      - name: install_device_type
+        description: "Adjust device type assigned from the lifetime start event."
+      - name: client_id
+        description: "Adjust client identifier."
+      - name: user_lifetime_id
+        description: "Install lifetime key from `gold__ua_cohort_users`."
+      - name: user_lifetime_number
+        description: "Sequential lifetime number within (application, client_id)."
+      - name: install_time
+        description: "Exact UTC timestamp of the install/reinstall event that opened the matched lifetime."
+      - name: lifetime_start_date
+        description: "Date when the matched lifetime starts."
+      - name: lifetime_end_date
+        description: "Date when the matched lifetime ends. Null means the lifetime is still open."
+      - name: sessions_count
+        description: "Number of user sessions on event_date inside the matched lifetime."
+      - name: session_duration_seconds_total
+        description: "Total session duration in seconds for the user on event_date."
+      - name: session_event_count_total
+        description: "Total session event count for the user on event_date."
+      - name: app_version_last
+        description: "Latest app version observed in sessions for event_date."
+      - name: purchases
+        description: "Total purchase count for event_date: in-app purchases + subscription normal purchases."
+      - name: refunds
+        description: "Total refund count for event_date across in-app and subscription flows."
+      - name: inapp_purchases
+        description: "Count of in-app purchase events on event_date."
+      - name: inapp_refunds_num
+        description: "Count of in-app refund events on event_date."
+      - name: subscription_purchases
+        description: "Count of subscription purchase events with `period_type = normal` on event_date."
+      - name: subscription_refunds_num
+        description: "Count of subscription refund events on event_date."
+      - name: trial_purchases
+        description: "Count of subscription trial purchases on event_date."
+      - name: trial_converted_purchases
+        description: "Count of subscription trial conversions on event_date."
+      - name: renewal_purchases
+        description: "Count of subscription renewals on event_date."
+      - name: cancelations
+        description: "Count of subscription cancellation signals on event_date."
+      - name: ad_impressions
+        description: "Total Applovin ad impressions for the user on event_date."
+      - name: ad_impressions_rewarded
+        description: "Rewarded Applovin impressions for the user on event_date."
+      - name: ad_impressions_interstitial
+        description: "Interstitial Applovin impressions for the user on event_date."
+      - name: ad_impressions_banner
+        description: "Banner Applovin impressions for the user on event_date."
+      - name: inapp_revenue_gross
+        description: "Gross in-app revenue on event_date."
+      - name: subs_revenue_gross
+        description: "Gross subscription revenue on event_date for normal purchases."
+      - name: ad_revenue_gross
+        description: "Gross ad revenue on event_date."
+      - name: inapp_refunds_revenue_net
+        description: "Absolute net refunded in-app revenue on event_date."
+      - name: subs_refunds_revenue_net
+        description: "Absolute net refunded subscription revenue on event_date."
+      - name: inapp_revenue_net
+        description: "Net in-app revenue on event_date."
+      - name: subs_revenue_net
+        description: "Net subscription revenue on event_date."
+      - name: ad_revenue_rewarded_gross
+        description: "Gross rewarded ad revenue on event_date."
+      - name: ad_revenue_interstitial_gross
+        description: "Gross interstitial ad revenue on event_date."
+      - name: ad_revenue_banner_gross
+        description: "Gross banner ad revenue on event_date."
+      - name: total_revenue_gross
+        description: "Gross total revenue on event_date: in-app + subscriptions + ad revenue."
+      - name: total_revenue_net
+        description: "Net total revenue on event_date: in-app net + subscriptions net + ad revenue."
+      - name: version
+        description: "Timestamp when the row was rebuilt."
+
+  - name: gold__ua_cohort_long
+    description: >
+      Long-format cohort fact table at grain
+      (`cohort_date`, `event_date`, `day_idx`, cohort dimensions). It combines
+      day-0 installs, day-0 UA spend, and user-level daily monetization/activity from
+      `gold__ua_user_lifetime_activity_daily` into one additive cohort fact table.
+      This is the main computation layer used to build `gold__ua_cohort_wide`.
+    columns:
+      - name: cohort_date
+        description: "Install cohort date."
+      - name: cohort_month
+        description: "Month bucket derived from cohort_date."
+      - name: cohort_week
+        description: "Week bucket derived from cohort_date."
+      - name: event_date
+        description: "Date on which the monetization or activity event happened."
+      - name: day_idx
+        description: "Day offset between cohort_date and event_date."
+      - name: application
+        description: "Application name at cohort grain."
+      - name: platform
+        description: "Normalized platform for the cohort row."
+      - name: country
+        description: "Country assigned from the lifetime start event."
+      - name: media_source
+        description: "Attribution media source assigned from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name assigned from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign identifier assigned from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name assigned from the lifetime start event."
+      - name: adset
+        description: "Adset name assigned from the lifetime start event."
+      - name: installs
+        description: "Install count. Non-zero only for day 0 rows."
+      - name: impressions
+        description: "UA network-reported ad impressions for the cohort grain on day 0."
+      - name: clicks
+        description: "UA network-reported ad clicks for the cohort grain on day 0."
+      - name: cost
+        description: "UA acquisition spend for the cohort grain on day 0."
+      - name: clients_sdk
+        description: "Distinct active users who had a session on the exact event_date."
+      - name: purchases
+        description: "Total number of purchase events across in-app and subscription flows."
+      - name: refunds
+        description: "Total number of refund events across in-app and subscription flows."
+      - name: inapp_purchases
+        description: "Count of in-app purchase events."
+      - name: inapp_refunds_num
+        description: "Count of in-app refund events."
+      - name: subscription_purchases
+        description: "Count of subscription purchase events."
+      - name: subscription_refunds_num
+        description: "Count of subscription refund events."
+      - name: trial_purchases
+        description: "Count of subscription purchases that belong to a trial period."
+      - name: trial_converted_purchases
+        description: "Count of subscription purchases marked as trial conversions."
+      - name: renewal_purchases
+        description: "Count of subscription renewal purchases."
+      - name: cancelations
+        description: "Count of subscription cancellation signals."
+      - name: inapp_revenue_gross
+        description: "Gross in-app purchase revenue."
+      - name: subs_revenue_gross
+        description: "Gross subscription purchase revenue."
+      - name: inapp_refunds_revenue_net
+        description: "Absolute net refunded in-app revenue."
+      - name: subs_refunds_revenue_net
+        description: "Absolute net refunded subscription revenue."
+      - name: inapp_revenue_net
+        description: "Net in-app revenue after subtracting refunds."
+      - name: subs_revenue_net
+        description: "Net subscription revenue after subtracting refunds."
+      - name: ad_impressions
+        description: "Total Applovin ad impressions attributed to cohort users on event_date."
+      - name: ad_impressions_rewarded
+        description: "Rewarded Applovin impressions."
+      - name: ad_impressions_interstitial
+        description: "Interstitial Applovin impressions."
+      - name: ad_impressions_banner
+        description: "Banner Applovin impressions."
+      - name: ad_revenue_gross
+        description: "Gross Applovin ad revenue."
+      - name: ad_revenue_rewarded_gross
+        description: "Gross rewarded Applovin ad revenue."
+      - name: ad_revenue_interstitial_gross
+        description: "Gross interstitial Applovin ad revenue."
+      - name: ad_revenue_banner_gross
+        description: "Gross banner Applovin ad revenue."
+      - name: total_revenue_gross
+        description: "Gross revenue before refunds: in-app + subscriptions + ad revenue."
+      - name: total_revenue_net
+        description: "Net cohort revenue after refunds: net in-app + net subscriptions + ad revenue."
+      - name: version
+        description: "Timestamp when the row was rebuilt."
+
+  - name: gold__ua_cohort_activity_utn
+    description: >
+      Helper table with unlimited-time cumulative active users for every cohort grain.
+      It counts distinct `user_lifetime_id` values from
+      `gold__ua_user_lifetime_activity_daily` that had at least one session-active day
+      (`sessions_count > 0`) on or after cohort start. The model is used only to
+      populate `active_users_utn` in `gold__ua_cohort_wide`.
+    columns:
+      - name: cohort_date
+        description: "Install cohort date."
+      - name: cohort_month
+        description: "Month bucket derived from cohort_date."
+      - name: cohort_week
+        description: "Week bucket derived from cohort_date."
+      - name: platform
+        description: "Normalized platform."
+      - name: application
+        description: "Application name."
+      - name: country
+        description: "Country assigned from the lifetime start event."
+      - name: media_source
+        description: "Attribution media source assigned from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name assigned from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign identifier assigned from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name assigned from the lifetime start event."
+      - name: adset
+        description: "Adset name assigned from the lifetime start event."
+      - name: clients_sdk_utn
+        description: "Distinct active users accumulated over the full observed cohort lifetime."
+      - name: version
+        description: "Timestamp when the row was rebuilt."
+
+  - name: gold__ua_cohort_wide
+    description: >
+      Final wide UA cohort mart with one row per cohort grain
+      (`cohort_date`, app, geo, channel, campaign, adset, ad). It is built from
+      `gold__ua_cohort_long`, `gold__ua_payers`, and `gold__ua_cohort_activity_utn`,
+      where `gold__ua_cohort_long` already consolidates `gold__ua_cohort_users`,
+      `gold__ua_user_lifetime_activity_daily`, and `silver__ua_costs`.
+      The final presentation layer is limited to the application whitelist embedded in
+      the SQL model. Day buckets `0/1/2/3/7/14/30/180/360` are cumulative for
+      monetization and payer metrics, exact-day for `active_users_*`, and protected by
+      a maturity guard for `N > 0`. `*_utn` columns keep the full observed cumulative
+      horizon, while `new_payers_N` stays exact-day for `N > 0`.
+    columns:
+      - name: cohort_date
+        description: "Install cohort date."
+      - name: cohort_month
+        description: "Month bucket derived from cohort_date."
+      - name: cohort_week
+        description: "Week bucket derived from cohort_date."
+      - name: application
+        description: "Application name."
+      - name: platform
+        description: "Normalized platform."
+      - name: country
+        description: "Country assigned from the lifetime start event."
+      - name: media_source
+        description: "Attribution media source assigned from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name assigned from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign identifier assigned from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name assigned from the lifetime start event."
+      - name: adset
+        description: "Adset name assigned from the lifetime start event."
+      - name: installs_0
+        description: "Number of installs on cohort day."
+      - name: impressions_0
+        description: "UA network-reported impressions on cohort day."
+      - name: clicks_0
+        description: "UA network-reported clicks on cohort day."
+      - name: cost_0
+        description: "UA acquisition spend on cohort day."
+      - name: active_users_0
+        description: "Distinct cohort users active on exact cohort day 0."
+      - name: active_users_7
+        description: "Distinct cohort users active on exact cohort day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: purchases_0
+        description: "Purchase events across in-app and subscription flows on exact cohort day 0."
+      - name: purchases_7
+        description: "Cumulative purchase events across in-app and subscription flows from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: refunds_7
+        description: "Cumulative refund events across in-app and subscription flows from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: inapp_purchases_7
+        description: "Cumulative in-app purchase events from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: subscription_purchases_7
+        description: "Cumulative subscription purchase events from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: trial_purchases_7
+        description: "Cumulative trial subscription purchases from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: renewal_purchases_7
+        description: "Cumulative subscription renewals from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: ad_impressions_7
+        description: "Cumulative Applovin ad impressions from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: ad_impressions_rewarded_7
+        description: "Cumulative rewarded Applovin impressions from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: inapp_revenue_gross_0
+        description: "Gross in-app revenue on exact cohort day 0."
+      - name: inapp_revenue_gross_7
+        description: "Cumulative gross in-app revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: subs_revenue_gross_7
+        description: "Cumulative gross subscription revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: ad_revenue_gross_7
+        description: "Cumulative gross ad revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: total_revenue_gross_7
+        description: "Cumulative gross total revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: total_revenue_net_0
+        description: "Net total revenue on exact cohort day 0."
+      - name: total_revenue_net_7
+        description: "Cumulative net total revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: inapp_refunds_revenue_net_7
+        description: "Cumulative absolute net refunded in-app revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: subs_refunds_revenue_net_7
+        description: "Cumulative absolute net refunded subscription revenue from cohort day 0 through day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: total_refunds_revenue_0
+        description: "Absolute total refunded revenue on exact cohort day 0: in-app refunds + subscription refunds."
+      - name: total_refunds_revenue_7
+        description: "Cumulative absolute total refunded revenue from cohort day 0 through day 7: in-app refunds + subscription refunds. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: paying_users_0
+        description: "Distinct cohort users whose first purchase happened on day 0."
+      - name: paying_users_7
+        description: "Cumulative distinct cohort users whose first purchase happened on or before day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: inapp_payers_7
+        description: "Cumulative distinct cohort users whose first in-app purchase happened on or before day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: subs_payers_7
+        description: "Cumulative distinct cohort users whose first subscription purchase happened on or before day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: new_payers_0
+        description: "Distinct cohort users whose first purchase happened on exact day 0."
+      - name: new_payers_7
+        description: "Distinct cohort users whose first purchase happened on exact cohort day 7. Returned only when the cohort has matured through day 7, otherwise `0`."
+      - name: purchases_utn
+        description: "Purchase events across in-app and subscription flows over the full observed cohort history."
+      - name: ad_impressions_utn
+        description: "Applovin ad impressions over the full observed cohort history."
+      - name: active_users_utn
+        description: "Distinct cohort users with at least one active day over the full observed cohort history."
+      - name: inapp_revenue_gross_utn
+        description: "Gross in-app revenue over the full observed cohort history."
+      - name: subs_revenue_gross_utn
+        description: "Gross subscription revenue over the full observed cohort history."
+      - name: ad_revenue_gross_utn
+        description: "Gross ad revenue over the full observed cohort history."
+      - name: total_revenue_gross_utn
+        description: "Gross total revenue over the full observed cohort history."
+      - name: total_revenue_net_utn
+        description: "Net total revenue over the full observed cohort history."
+      - name: total_refunds_revenue_utn
+        description: "Absolute total refunded revenue over the full observed cohort history: in-app refunds + subscription refunds."
+      - name: paying_users_utn
+        description: "Distinct cohort users whose first purchase was observed anywhere in the full observed cohort history."
+      - name: inapp_payers_utn
+        description: "Distinct cohort users whose first in-app purchase was observed anywhere in the full observed cohort history."
+      - name: subs_payers_utn
+        description: "Distinct cohort users whose first subscription purchase was observed anywhere in the full observed cohort history."
+      - name: new_payers_utn
+        description: "Distinct cohort users whose first purchase was observed anywhere in the full observed cohort history. By construction it matches `paying_users_utn`."
+      - name: version
+        description: "Timestamp when the row was rebuilt."
+
+  - name: gold__monetization_curves
+    description: "UA cohort monetization curves mart with one row per cohort grain and cohort_day. Current test version is limited to January 2026 cohorts and contains dense ad/total revenue curves with cumulative, previous-day cumulative, day-0 values, installs, and spend for BI-side ROAS and growth checks."
+    columns:
+      - name: cohort_date
+      - name: cohort_day
+      - name: application
+      - name: platform
+      - name: spend
+      - name: ad_revenue_gross
+      - name: ad_revenue_gross_cumulative
+      - name: total_revenue_net_cumulative
+  - name: gold__ua_payers
+    description: >
+      User-level payer summary at grain (`application`, `client_id`, `user_lifetime_id`).
+      It joins cohort users to in-app and subscription events inside the matching
+      lifetime date window and stores first-purchase dates, payer flags, and lifetime
+      purchase amounts. The model is used to derive payer conversion columns in
+      `gold__ua_cohort_wide`.
+    columns:
+      - name: cohort_date
+        description: "Install cohort date of the user lifetime."
+      - name: cohort_month
+        description: "Month bucket derived from cohort_date."
+      - name: cohort_week
+        description: "Week bucket derived from cohort_date."
+      - name: platform
+        description: "Normalized platform."
+      - name: application
+        description: "Application name."
+      - name: country
+        description: "Country assigned from the lifetime start event."
+      - name: media_source
+        description: "Attribution media source assigned from the lifetime start event."
+      - name: promo_campaign
+        description: "Campaign name assigned from the lifetime start event."
+      - name: promo_campaign_id
+        description: "Campaign identifier assigned from the lifetime start event."
+      - name: ad
+        description: "Creative/ad name assigned from the lifetime start event."
+      - name: adset
+        description: "Adset name assigned from the lifetime start event."
+      - name: client_id
+        description: "Adjust client identifier."
+      - name: user_lifetime_id
+        description: "Lifetime key used as the join grain to cohort users."
+      - name: is_inapp_payer
+        description: "Flag showing that the lifetime has at least one in-app purchase."
+      - name: is_subscription_payer
+        description: "Flag showing that the lifetime has at least one subscription purchase."
+      - name: purchases_total
+        description: "Total number of purchase events across in-app and subscription flows."
+      - name: subscription_purchases
+        description: "Number of subscription purchase events."
+      - name: inapp_purchases
+        description: "Number of in-app purchase events."
+      - name: inapp_currency
+        description: "Single in-app local currency for the lifetime or `MULTI` when multiple currencies are present."
+      - name: subscription_currency
+        description: "Single subscription local currency for the lifetime or `MULTI` when multiple currencies are present."
+      - name: inapp_amount_local_total
+        description: "Total in-app amount in local currency when all in-app purchases share one currency."
+      - name: subscription_amount_local_total
+        description: "Total subscription amount in local currency when all subscription purchases share one currency."
+      - name: inapp_amount_usd_total
+        description: "Total in-app amount in USD."
+      - name: subscription_amount_usd_total
+        description: "Total subscription amount in USD."
+      - name: first_purchase_timestamp
+        description: "Timestamp of the first purchase event across both payment streams."
+      - name: first_purchase_date
+        description: "Date of the first purchase event across both payment streams."
+      - name: first_inapp_purchase_date
+        description: "Date of the first in-app purchase event inside the lifetime."
+      - name: first_subscription_purchase_date
+        description: "Date of the first subscription purchase event inside the lifetime."
+      - name: version
+        description: "Timestamp when the row was rebuilt."
+
+  - name: gold__app_revenue_by_source_daily
+    description: "Unified daily app-level revenue mart by source_tag/source_model for appsyoulove, magify, apple, adjust, and applovin comparisons."
+    columns:
+      - name: event_date
+      - name: app_name
+      - name: platform
+      - name: source_tag
+      - name: source_model
+      - name: revenue_total_usd
+  - name: gold__app_revenue_compare_daily
+    description: "Daily app-level wide mart for direct revenue comparison across source tags and derived deltas vs appsyoulove."
+    columns:
+      - name: event_date
+      - name: app_name
+      - name: platform
+      - name: total_revenue_all_sources_usd

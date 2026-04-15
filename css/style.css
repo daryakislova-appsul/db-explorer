@@ -531,6 +531,109 @@ body {
   background: rgba(210, 153, 34, 0.2);
 }
 
+/* ── Model Metadata ────────────────────────────────────────────────────────── */
+.model-meta-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.model-meta-section h3 {
+  font-size: 14px; font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.model-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.model-meta-item {
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+.model-meta-item.full-width { grid-column: 1 / -1; }
+
+.model-meta-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.model-meta-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  line-height: 1.5;
+}
+
+/* ── Derivation columns ───────────────────────────────────────────────────── */
+.schema-table .col-source {
+  font-size: 12px;
+  color: var(--cyan);
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.schema-table .col-derivation {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 400px;
+}
+
+.deriv-formula {
+  background: var(--bg-tertiary);
+  color: var(--yellow);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.deriv-passthrough {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.deriv-cte {
+  color: var(--purple);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+
+.deriv-cte::before { content: "CTE: "; color: var(--text-muted); font-weight: 400; }
+
+.deriv-agg {
+  color: var(--green);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.deriv-agg::before { content: "Agg: "; color: var(--text-muted); }
+
+.deriv-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.text-muted { color: var(--text-muted); }
+
 /* ── Search Results ─────────────────────────────────────────────────────────── */
 .search-results { max-width: 1100px; }
 

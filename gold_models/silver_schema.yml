@@ -1,0 +1,601 @@
+version: 2
+
+models:
+  - name: currency_rates_scd2
+    description: >
+      Slowly changing dimension of exchange rates used to convert local transaction
+      amounts into normalized USD amounts. Each row stores the validity window of one
+      quoted currency relative to the base currency used in downstream pricing logic.
+    columns:
+      - name: base_currency
+        description: "Base currency of the rate record."
+      - name: currency
+        description: "Quoted currency whose rate is stored in the row."
+      - name: valid_from_date
+        description: "First date on which the rate is valid."
+      - name: valid_to_date
+        description: "Last date on which the rate is valid."
+      - name: value
+        description: "Exchange-rate denominator used in downstream USD conversion logic."
+  - name: silver__inapp_table
+    description: >
+      Final silver in-app event fact table with one row per purchase event and one row
+      per refund event. It is built from validated staged purchases and matched refunds
+      and exposes one unified downstream schema for cohort and revenue models.
+    columns:
+      - name: event_name
+        description: "Normalized event type: `purchase` or `refund`."
+      - name: trigger_name
+        description: "Original trigger event name associated with the in-app event."
+      - name: client_id
+        description: "Client identifier used to join the event to user lifetimes and cohorts."
+      - name: event_time
+        description: "Timestamp of the purchase or refund event."
+      - name: price
+        description: "Normalized USD amount after currency, commission, and VAT logic."
+      - name: price_gross
+        description: "Gross USD amount derived from local_price before VAT/store-fee multiplier logic."
+      - name: local_price
+        description: "Amount in the local transaction currency."
+      - name: currency
+        description: "Local transaction currency."
+      - name: product_id
+        description: "Purchased product identifier."
+      - name: product_id_type
+        description: "Mapped product type."
+      - name: transaction_id
+        description: "Original purchase transaction identifier."
+      - name: purchase_number
+        description: "Sequential purchase number of the user inside the app."
+      - name: refund_ind
+        description: "Refund flag. `1` for refund events and also on purchase rows that have a linked refund."
+      - name: refund_time
+        description: "Refund timestamp when the purchase was refunded or when the row itself is a refund."
+      - name: refund_transaction_id
+        description: "Refund-side transaction identifier."
+      - name: platform
+        description: "Normalized platform (`IOS`, `ANDROID`, `UNKNOWN`)."
+      - name: new_user
+        description: "Flag showing that the event belongs to the first observed purchase day of the user in the app."
+      - name: app_name
+        description: "Application name."
+      - name: app_version
+        description: "App version observed on the event."
+      - name: session_number
+        description: "Session ordinal from source/session enrichment."
+      - name: session_id
+        description: "Session identifier matched from SessionEventStore by app/client/event_time."
+      - name: country
+        description: "Country from the source event."
+      - name: device_name
+        description: "Device name from the source event."
+      - name: device_version
+        description: "Device version from the source event."
+      - name: media_source
+        description: "Attribution media source placeholder. Currently null by design in this model."
+      - name: creative
+        description: "Creative/ad placeholder. Currently null by design in this model."
+      - name: promo_campaign
+        description: "Promo campaign placeholder. Currently null by design in this model."
+      - name: currency_rates_denominator
+        description: "Currency-rate denominator used to calculate USD price."
+      - name: vat_income_multiplier
+        description: "Multiplier applied during net-price calculation."
+
+
+  - name: silver__axon_campaigns
+    description: "Deduplicated Axon campaign snapshot table with shared campaign attributes and extracted goal/budget/tracking fields."
+    columns:
+      - name: account_id
+      - name: snapshot_date
+      - name: snapshot_ts
+      - name: campaign_id
+      - name: campaign_name
+      - name: goal_type
+  - name: silver__axon_campaigns_latest
+    description: "Latest known Axon campaign state with one row per account_id and campaign_id."
+    columns:
+      - name: account_id
+      - name: campaign_id
+      - name: snapshot_date
+      - name: snapshot_ts
+      - name: campaign_name
+      - name: goal_type
+  - name: silver__axon_campaign_targeting
+    description: "Country targeting exploded from Axon campaign snapshots."
+    columns:
+      - name: account_id
+      - name: snapshot_ts
+      - name: campaign_id
+      - name: country_code
+  - name: silver__axon_campaign_goal_country_values
+    description: "Country-specific optimization goal values exploded from payload.goal.country_code_to_goal_value."
+    columns:
+      - name: account_id
+      - name: snapshot_ts
+      - name: campaign_id
+      - name: goal_type
+      - name: country_code
+      - name: goal_value
+  - name: silver__axon_campaign_budget_country_values
+    description: "Country-specific daily budgets exploded from payload.budget.country_code_to_daily_budget."
+    columns:
+      - name: account_id
+      - name: snapshot_ts
+      - name: campaign_id
+      - name: country_code
+      - name: daily_budget
+  - name: silver__subscription_table
+    description: >
+      Final subscription event fact table with one row per purchase/renewal event and one
+      row per refund/cancellation event. It enriches staged subscription transactions
+      with activation context, inferred client ids, session ids, lifetime-based new-user
+      logic, and cancellation/refund flags.
+    columns:
+      - name: event_name
+        description: "Normalized event type: `purchase` or `refund`."
+      - name: trigger_name
+        description: "Activation trigger event name matched from subscription context."
+      - name: client_id
+        description: "Client identifier resolved from context or transaction-chain inference."
+      - name: app_name
+        description: "Application name."
+      - name: transaction_id
+        description: "Normalized transaction identifier used downstream."
+      - name: event_time
+        description: "Timestamp of the purchase, renewal, or refund event."
+      - name: price
+        description: "Normalized USD amount of the event."
+      - name: price_gross
+        description: "Gross USD amount derived from local_price before VAT/store-fee multiplier logic."
+      - name: local_price
+        description: "Amount in local transaction currency."
+      - name: currency
+        description: "Local transaction currency."
+      - name: currency_rates_denominator
+        description: "Currency-rate denominator used to derive USD price."
+      - name: vat_income_multiplier
+        description: "Multiplier used to remove VAT/store-fee effects during repricing."
+      - name: type
+        description: "Raw subscription transaction type from the staged transaction stream."
+      - name: period_type
+        description: "Subscription period classification such as `TRIAL` or `NORMAL`."
+      - name: product_id
+        description: "Subscription product identifier."
+      - name: original_transaction_id
+        description: "Original transaction chain identifier linking renewals and refunds."
+      - name: is_trial_conversion
+        description: "Flag showing that the purchase converts a trial into paid."
+      - name: store
+        description: "Store identifier such as App Store or Play Store."
+      - name: refund_ind
+        description: "Refund flag. `1` for refund rows and for purchase rows that were later refunded."
+      - name: refund_time
+        description: "Timestamp of the matched refund/cancellation event."
+      - name: refund_transaction_id
+        description: "Refund-side transaction identifier."
+      - name: platform
+        description: "Normalized platform (`IOS`, `ANDROID`, `UNKNOWN`)."
+      - name: new_user
+        description: "Flag showing that this is the first non-cancellation subscription purchase inside the user lifetime."
+      - name: app_version
+        description: "App version from activation context when available."
+      - name: session_number
+        description: "Session ordinal from activation context when available."
+      - name: session_id
+        description: "Session identifier matched from SessionEventStore by app/client/event_time."
+      - name: country
+        description: "Country resolved from transaction or activation context."
+      - name: device_name
+        description: "Device name from activation context when available."
+      - name: device_version
+        description: "Device version from activation context when available."
+      - name: media_source
+        description: "Attribution media source placeholder. Currently null by design in this model."
+      - name: creative
+        description: "Creative/ad placeholder. Currently null by design in this model."
+      - name: promo_campaign
+        description: "Promo campaign placeholder. Currently null by design in this model."
+      - name: cancel_ind
+        description: "Cancellation flag derived from transaction type or cancel_reason."
+      - name: cancel_time
+        description: "Timestamp of cancellation when the event carries a cancellation signal."
+      - name: cancel_reason
+        description: "Cancellation reason from source systems when available."
+
+
+  - name: silver__user_sessions
+    description: >
+      Stable core session-boundary model built from `stg_user_sessions`. One row
+      represents one session identified by (`app_name`, `client_id`, `session_id`) and
+      stores session timing, duration, event counts, and last-known app/device
+      metadata. Downstream marts should depend on this model instead of reading staging
+      directly.
+    columns:
+      - name: app_name
+        description: "Application name from session events."
+      - name: client_id
+        description: "Client identifier from session events."
+      - name: session_id
+        description: "Session identifier."
+      - name: session_number
+        description: "Session ordinal from the raw event stream."
+      - name: session_start
+        description: "Timestamp of the first event in the session."
+      - name: session_end
+        description: "Timestamp of the last event in the session."
+      - name: session_duration_seconds
+        description: "Session duration in seconds (`session_end - session_start`)."
+      - name: session_event_count
+        description: "Number of raw SessionEvent rows inside the session."
+      - name: first_event_name
+        description: "Name of the first event in the session."
+      - name: last_event_name
+        description: "Name of the last event in the session."
+      - name: app_version
+        description: "Latest app version observed in the session."
+      - name: country
+        description: "Latest country observed in the session."
+      - name: device_name
+        description: "Latest device name observed in the session."
+      - name: device_version
+        description: "Latest device version observed in the session."
+
+
+  - name: magify_payments_events
+    description: "Legacy-compatible Magify payment events stream for revenue comparison with the new pipeline."
+
+
+  - name: silver__adjust_revenue_table
+    description: "Aggregated Adjust revenue using revenue_usd only, split into subscription, in-app, and ad buckets plus counts by bucket."
+    columns:
+      - name: event_date
+      - name: source_table
+      - name: platform
+      - name: revenue_total
+      - name: revenue_subscription
+      - name: revenue_inapp
+      - name: revenue_ad
+      - name: count_total
+      - name: count_impression
+  - name: silver__apple_revenue_table
+    description: "Aggregated Apple report revenue in USD with gross/net and subscription vs in-app splits."
+    columns:
+      - name: event_date
+      - name: source_table
+      - name: platform
+      - name: app_name
+      - name: revenue_gross_usd
+      - name: revenue_net_usd
+  - name: silver__applovin_impression_revenue_table
+    description: "Aggregated Applovin impression feed by ad type with impressions_count and total revenue."
+    columns:
+      - name: event_date
+      - name: source_table
+      - name: app_name
+      - name: platform
+      - name: ad_type
+      - name: impressions_count
+      - name: revenue_total
+  - name: silver__applovin_user_revenue_table
+    description: "Aggregated Applovin user revenue feed by ad type with impressions_count and total revenue."
+    columns:
+      - name: event_date
+      - name: source_table
+      - name: platform
+      - name: ad_type
+      - name: impressions_count
+      - name: revenue_total
+  - name: silver__applovin_ad_user_daily
+    description: >
+      User-level daily Applovin ad revenue fact used for cohort joins. It aggregates
+      impression counts and ad revenue by (`event_date`, `app_name`, `client_id`) and
+      splits metrics by ad format. Primary source is `bronze.applovin_impression_data`
+      with a historical fallback to `ApplovinUserRevenueWithFBReportDataModel`.
+    columns:
+      - name: event_date
+        description: "UTC event date."
+      - name: app_name
+        description: "Normalized application name."
+      - name: client_id
+        description: "User identifier used for joins to cohort lifetime models and downstream UA cohort marts."
+      - name: impressions_total
+        description: "Total user-level daily impressions across all ad types."
+      - name: revenue_total
+        description: "Total user-level daily ad revenue across all ad types. Alias of `ad_revenue_total`."
+      - name: impressions_count
+        description: "User-level daily impressions count. Same metric as `impressions_total` kept for compatibility."
+      - name: ad_revenue_total
+        description: "User-level daily ad revenue. Same metric as `revenue_total` kept for compatibility."
+      - name: impressions_banner
+        description: "Banner impressions count for user/day."
+      - name: impressions_interstitial
+        description: "Interstitial impressions count for user/day."
+      - name: impressions_rewarded
+        description: "Rewarded impressions count for user/day."
+      - name: impressions_native
+        description: "Native impressions count for user/day."
+      - name: impressions_mrec
+        description: "MREC impressions count for user/day."
+      - name: impressions_other
+        description: "Other/unknown impressions count for user/day."
+      - name: revenue_banner
+        description: "Banner ad revenue for user/day."
+      - name: revenue_interstitial
+        description: "Interstitial ad revenue for user/day."
+      - name: revenue_rewarded
+        description: "Rewarded ad revenue for user/day."
+      - name: revenue_native
+        description: "Native ad revenue for user/day."
+      - name: revenue_mrec
+        description: "MREC ad revenue for user/day."
+      - name: revenue_other
+        description: "Other/unknown ad revenue for user/day."
+      - name: source_table
+        description: "Source branch used for the row."
+      - name: updated_at_utc
+        description: "UTC timestamp when the row was last refreshed."
+
+
+  - name: legacy__inapps_rc_checked_and_enriched
+    description: "Compatibility layer for legacy inAppsRCcheckedAndEnrichedStore shape built from stg_inapp_purchases."
+
+
+  - name: legacy__paid_subscription_activation_rc_checked_and_enriched
+    description: "Compatibility layer for legacy paid subscription activation shape built from stg_subscription_transactions."
+
+
+  - name: legacy__trial_activation_rc_checked_and_enriched
+    description: "Compatibility layer for legacy trial activation shape built from stg_subscription_transactions."
+
+
+  - name: silver__adjust_sessions_first_seen
+    description: "Minimal observed event per (app_name, client_id) from bronze.ADJUSTSessionsStoreStore, filtered to dates >= 2020-01-01. Used as fallback for users missing install/reinstall."
+    columns:
+      - name: app_name
+        description: "Application name."
+      - name: client_id
+        description: "User identifier from Adjust sessions."
+      - name: first_event_time
+        description: "Earliest observed session event timestamp for the user/app."
+      - name: first_event_date
+        description: "Date part of first_event_time."
+      - name: source_table
+        description: "Raw source table identifier."
+  - name: silver__users
+    description: "User-level profile keyed by (app_name, client_id). Primary attribution data comes from Adjust install/reinstall streams; users missing install/reinstall are added via fallback first-seen table from ADJUSTSessions. Sources: bronze.ADJUSTInstallsStoreStore, bronze.ADJUSTReInstallsStoreStore, bronze.ADJUSTSessionsStoreStore."
+    columns:
+      - name: app_name
+        description: "Application name."
+      - name: client_id
+        description: "User identifier from Adjust."
+      - name: first_install_time
+        description: "Earliest known install timestamp; when absent in install/reinstall stream, fallback to first observed Adjust session event."
+      - name: first_install_date
+        description: "Date part of first_install_time."
+      - name: last_event_time
+        description: "Latest attribution event timestamp from Adjust, or fallback first session timestamp when attribution events are absent."
+      - name: last_activity_kind
+        description: "Activity kind from latest attribution event; fallback is 'session' for users from ADJUSTSessions fallback."
+      - name: last_attribution_status
+        description: "Derived latest attribution status (installed/reattributed), or 'unknown' for session-only fallback users."
+      - name: last_is_install
+        description: "Latest install flag (1 for install-like attribution event, 0 for reinstall)."
+      - name: first_media_source
+        description: "Media source from earliest install attribution."
+      - name: first_promo_campaign
+        description: "Campaign name from earliest install attribution."
+      - name: first_promo_campaign_id
+        description: "Campaign id from earliest install attribution."
+      - name: first_adset
+        description: "Adset name from earliest install attribution."
+      - name: first_adset_id
+        description: "Adset id from earliest install attribution."
+      - name: first_ad
+        description: "Creative/ad name from earliest install attribution."
+      - name: first_ad_id
+        description: "Creative/ad id from earliest install attribution."
+      - name: first_country_code
+        description: "Country from earliest install attribution."
+      - name: first_platform
+        description: "Platform from earliest install attribution."
+      - name: last_media_source
+        description: "Media source from latest attribution event."
+      - name: last_promo_campaign
+        description: "Campaign name from latest attribution event."
+      - name: last_promo_campaign_id
+        description: "Campaign id from latest attribution event."
+      - name: last_adset
+        description: "Adset name from latest attribution event."
+      - name: last_adset_id
+        description: "Adset id from latest attribution event."
+      - name: last_ad
+        description: "Creative/ad name from latest attribution event."
+      - name: last_ad_id
+        description: "Creative/ad id from latest attribution event."
+      - name: last_country_code
+        description: "Country from latest attribution event."
+      - name: last_platform
+        description: "Platform from latest attribution event."
+      - name: last_app_version
+        description: "App version from latest attribution event."
+      - name: last_sdk_version
+        description: "Adjust SDK version from latest attribution event."
+      - name: last_cost_currency
+        description: "Cost currency from latest attribution event."
+      - name: last_cost_model
+        description: "Cost model from latest attribution event."
+      - name: last_cost_value
+        description: "Cost value from latest attribution event."
+      - name: last_click_time
+        description: "Click/impression timestamp from latest attribution event."
+      - name: last_donor_id
+        description: "Cross-promo donor id from latest attribution event."
+      - name: last_site_id
+        description: "Site id (mapped from adgroup_name in Adjust)."
+      - name: device_type
+        description: "Deprecated in silver__users. Moved to silver__users_app_launch_profile; kept nullable for backward compatibility."
+      - name: device_name
+        description: "Deprecated in silver__users. Moved to silver__users_app_launch_profile; kept nullable for backward compatibility."
+      - name: device_version
+        description: "Deprecated in silver__users. Moved to silver__users_app_launch_profile; kept nullable for backward compatibility."
+      - name: lang
+        description: "Deprecated in silver__users. Moved to silver__users_app_launch_profile; kept nullable for backward compatibility."
+      - name: is_idfa_available
+        description: "Deprecated in silver__users. Moved to silver__users_app_launch_profile; kept nullable for backward compatibility."
+      - name: last_source_table
+        description: "Adjust source table that contributed the latest user signal (install/reinstall or sessions fallback)."
+      - name: source_max_version
+        description: "Maximum source version timestamp observed for this user."
+      - name: attribution_events_count
+        description: "Count of deduplicated Adjust attribution events for the user."
+      - name: install_events_count
+        description: "Count of install events."
+      - name: reinstall_events_count
+        description: "Count of reinstall events."
+      - name: reattribution_events_count
+        description: "Count of reattribution events (activity_kind starts with reattrib)."
+      - name: user_presence_source
+        description: "Origin of user row: install/reinstall attribution stream or sessions fallback."
+  - name: silver__users_scd2
+    description: >
+      Install-lifetime SCD2 table keyed by (`app_name`, `client_id`, `install_time`). A
+      new lifetime is created for every Adjust install or reattribution/reinstall event.
+      Session fallback is intentionally excluded. This model is the source of truth for
+      UA cohort assignment when the same `client_id` can have multiple independent
+      acquisition lifetimes.
+    columns:
+      - name: app_name
+        description: "Application name from Adjust install stream."
+      - name: client_id
+        description: "Adjust client identifier. The same client_id can have multiple lifetime rows."
+      - name: user_lifetime_id
+        description: "Deterministic lifetime key built from app_name, client_id, and install_time."
+      - name: user_lifetime_number
+        description: "Sequential lifetime number within (app_name, client_id), ordered by install_time."
+      - name: install_time
+        description: "Start timestamp of the lifetime. Uses `installed_at` for ADJUSTInstalls and `coalesce(reattributed_at, installed_at)` for ADJUSTReInstalls."
+      - name: install_date
+        description: "Date part of install_time."
+      - name: lifetime_end_time
+        description: "Start timestamp of the next lifetime for the same (app_name, client_id). Null means the lifetime is currently open."
+      - name: is_current_lifetime
+        description: "Flag showing whether the lifetime is the latest open lifetime for the user."
+      - name: source_table
+        description: "Adjust source stream that created the lifetime row."
+      - name: activity_kind
+        description: "Original Adjust activity kind for the lifetime start event. Expected values are install/reinstall/reattribution variants."
+      - name: platform
+        description: "Platform from the install event that opened the lifetime."
+      - name: country_code
+        description: "Country from the install event that opened the lifetime."
+      - name: media_source
+        description: "Media source from the install event that opened the lifetime."
+      - name: promo_campaign
+        description: "Campaign name from the install event that opened the lifetime."
+      - name: promo_campaign_id
+        description: "Campaign id from the install event that opened the lifetime."
+      - name: ad
+        description: "Creative/ad name from the install event that opened the lifetime."
+      - name: ad_id
+        description: "Creative/ad id from the install event that opened the lifetime."
+      - name: adset
+        description: "Adset name from the install event that opened the lifetime."
+      - name: adset_id
+        description: "Adset id from the install event that opened the lifetime."
+      - name: install_device_name
+        description: "Adjust device name from the install/reinstall event that opened the lifetime."
+      - name: install_device_type
+        description: "Adjust device type from the install/reinstall event that opened the lifetime."
+      - name: source_version
+        description: "Maximum source version observed for the raw install rows that were collapsed into this lifetime."
+
+
+  - name: silver__user_activity_daily
+    description: >
+      Daily user activity snapshot in UTC built from `stg_user_sessions`. One row
+      represents one (`app_name`, `client_id`, `activity_date_utc`) combination and
+      stores session counts, daily session aggregates, and the last observed
+      app/country/device metadata for that UTC date. The current UTC day is excluded so
+      downstream cohort buckets can rely on closed daily windows.
+    columns:
+      - name: app_name
+        description: "Application name from session events."
+      - name: client_id
+        description: "User identifier from session events."
+      - name: activity_date_utc
+        description: "UTC calendar date of activity derived from session_start."
+      - name: is_active
+        description: "Daily activity flag (always 1 when at least one session exists)."
+      - name: sessions_count
+        description: "Number of sessions for user/app/day."
+      - name: session_duration_seconds_total
+        description: "Total session duration in seconds for user/app/day."
+      - name: session_event_count_total
+        description: "Total number of session events for user/app/day."
+      - name: first_session_start_utc
+        description: "First session start timestamp in UTC for the day."
+      - name: last_session_end_utc
+        description: "Last session end timestamp in UTC for the day."
+      - name: app_version_last
+        description: "Last app version observed on the UTC activity date."
+      - name: country_last
+        description: "Last country observed on the UTC activity date."
+      - name: device_name_last
+        description: "Last device name observed on the UTC activity date."
+      - name: device_version_last
+        description: "Last device version observed on the UTC activity date."
+      - name: install_device_name
+        description: >
+          Device name from the Adjust install/reinstall event for the lifetime matched to
+          the last session of the UTC activity date. If a user crosses a lifetime
+          boundary within one UTC day, the row keeps the install device from the lifetime
+          of that last session.
+      - name: install_device_type
+        description: >
+          Device type from the Adjust install/reinstall event for the lifetime matched to
+          the last session of the UTC activity date. If a user crosses a lifetime
+          boundary within one UTC day, the row keeps the install device type from the
+          lifetime of that last session.
+      - name: updated_at_utc
+        description: "UTC timestamp when the row was refreshed."
+  - name: silver__ua_costs
+    description: >
+      Unified UA spend and delivery fact across supported paid acquisition sources
+      (Unity, Facebook, IronSource, ASA, Google Ads, Applovin, TikTok, Mintegral). One
+      row represents the ad-network reporting grain by day and acquisition dimensions.
+      `clicks` and `impressions` are marketing metrics from channel reports, not product
+      events and not user-level Adjust events.
+    columns:
+      - name: day
+        description: "Report date."
+      - name: platform
+        description: "Platform reported by the ad network."
+      - name: application
+        description: "Application name in the UA report."
+      - name: country
+        description: "Country or geo dimension from the UA report."
+      - name: media_source
+        description: "Normalized attribution media source."
+      - name: promo_campaign
+        description: "Campaign name from the UA source."
+      - name: promo_campaign_id
+        description: "Campaign identifier from the UA source."
+      - name: adset
+        description: "Adset/ad group or source-specific grouping field."
+      - name: adset_id
+        description: "Adset/ad group identifier when available."
+      - name: ad
+        description: "Creative/ad name or keyword depending on source grain."
+      - name: ad_id
+        description: "Creative/ad identifier when available."
+      - name: site_id
+        description: "Publisher/site/sub-id dimension when available from the source."
+      - name: keywords
+        description: "Keyword dimension, mainly populated for Apple Search Ads."
+      - name: cost
+        description: "Aggregated marketing spend reported by ad networks in normalized USD-like terms at the UA reporting grain. Google spend is converted via CurrencyRates."
+      - name: clicks
+        description: "Aggregated ad clicks reported by ad networks at the UA reporting grain. This is a marketing acquisition metric, not an in-app or user event."
+      - name: impressions
+        description: "Aggregated ad impressions reported by ad networks at the UA reporting grain. This is a marketing acquisition metric, not an in-app or user event."

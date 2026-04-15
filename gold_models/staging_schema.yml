@@ -1,0 +1,233 @@
+version: 2
+
+models:
+  - name: stg_inapp_purchases
+    description: >
+      Staged in-app purchase stream from `bronze.InApps` with transaction-level dedup,
+      platform normalization, commission and VAT enrichment, validator checks, and
+      best-effort session matching. This model keeps purchase rows only and feeds
+      `silver__inapp_table`.
+    columns:
+      - name: app_name
+        description: "Application name from the purchase event."
+      - name: app_version
+        description: "App version observed on the purchase event."
+      - name: transaction_id
+        description: "Store transaction identifier after purchase-stream deduplication."
+      - name: event_time
+        description: "Purchase event timestamp."
+      - name: client_id
+        description: "Client identifier from the purchase event."
+      - name: local_price
+        description: "Purchase amount in local currency after source normalization."
+      - name: currency
+        description: "Local currency of the purchase."
+      - name: product_id
+        description: "Purchased product identifier."
+      - name: product_id_type
+        description: "Mapped product type from `product_id_data_model`."
+      - name: purchase_number
+        description: "Sequential purchase number of the user inside the app."
+      - name: platform
+        description: "Normalized platform (`IOS`, `ANDROID`, `UNKNOWN`)."
+      - name: session_number
+        description: "Session ordinal from the source event when available."
+      - name: session_id
+        description: "Session identifier matched from stg_user_sessions by app/client/event_time."
+      - name: country
+        description: "Country from the purchase event."
+      - name: campaign_name
+        description: "Campaign name from campaign lookup enrichment."
+      - name: parent_campaign_name
+        description: "Parent campaign name from campaign lookup enrichment."
+      - name: campaign_type
+        description: "Campaign type from campaign lookup enrichment."
+      - name: media_source
+        description: "Placeholder attribution media source. Currently null by design in this staging model."
+      - name: creative
+        description: "Placeholder creative/ad field. Currently null by design in this staging model."
+      - name: promo_campaign
+        description: "Placeholder promo campaign field. Currently null by design in this staging model."
+      - name: trigger_name
+        description: "In-app trigger event name associated with the purchase."
+      - name: trigger_number
+        description: "Event ordinal inside the trigger stream."
+      - name: session_trigger_number
+        description: "Trigger ordinal inside the session."
+      - name: subscription_status
+        description: "Subscription status from the source purchase event."
+      - name: level
+        description: "Game level or progression marker from the purchase event."
+      - name: mode
+        description: "Game mode from the purchase event."
+      - name: validator_matched
+        description: "Flag showing that the transaction was matched to a trusted validator source."
+      - name: currency_rates_denominator
+        description: "Currency-rate denominator used later to convert local price into USD."
+      - name: vat_income_multiplier
+        description: "Multiplier that removes store fee and VAT effects according to app/store rules."
+
+
+  - name: stg_inapp_refunds
+    description: >
+      Staged refund attributes for in-app purchases. Refund candidates are collected from
+      RevenueCat, Apple server notifications, and Google purchase records, then matched
+      back to staged purchases and deduplicated to one refund per original purchase
+      transaction.
+    columns:
+      - name: app_name
+        description: "Application name resolved from the matched purchase row."
+      - name: platform
+        description: "Platform resolved from the refund source or matched purchase row."
+      - name: transaction_id
+        description: "Original purchase transaction identifier that was refunded."
+      - name: refund_ind
+        description: "Refund flag. Always `1` for rows in this table."
+      - name: refund_time
+        description: "Timestamp when the refund/cancellation happened."
+      - name: refund_transaction_id
+        description: "Refund-side transaction identifier emitted by the source system."
+      - name: refund_source
+        description: "Source system that produced the refund signal."
+
+
+  - name: stg_subscription_transactions
+    description: >
+      Unified staged subscription transaction stream. It merges RevenueCat events with
+      Apple and Google validation/supplemental feeds, normalizes purchase/renewal/refund
+      semantics, reprices rows when needed, and exposes one clean transaction stream for
+      `silver__subscription_table`.
+    columns:
+      - name: client_id
+        description: "Client identifier when it is available from source systems or inferred joins."
+      - name: app_name
+        description: "Application name."
+      - name: transaction_id
+        description: "Normalized transaction identifier used downstream."
+      - name: event_time
+        description: "Timestamp of the staged subscription transaction."
+      - name: event_transaction_id
+        description: "Raw event-side transaction id before lifetime-level normalization."
+      - name: original_transaction_id
+        description: "Original subscription chain identifier used to connect renewals and refunds."
+      - name: product_id
+        description: "Subscription product identifier."
+      - name: type
+        description: "Raw subscription transaction type."
+      - name: period_type
+        description: "Period classification such as `TRIAL` or `NORMAL`."
+      - name: is_trial_conversion
+        description: "Flag showing that the transaction converts a trial into paid."
+      - name: price
+        description: "Normalized USD amount for the transaction."
+      - name: local_price
+        description: "Transaction amount in local currency."
+      - name: currency
+        description: "Local transaction currency."
+      - name: comission_percentage
+        description: "Commission percentage from the source system. Column name preserves legacy spelling."
+      - name: takehome_percentage
+        description: "Take-home percentage from the source system."
+      - name: store
+        description: "Store identifier such as App Store or Play Store."
+      - name: country
+        description: "Country/storefront associated with the transaction."
+      - name: refund_transaction_id
+        description: "Refund-side transaction identifier for cancellation/refund rows."
+      - name: cancel_reason
+        description: "Cancellation reason from the source system when available."
+      - name: currency_rates_denominator
+        description: "Currency-rate denominator used to derive USD price."
+      - name: vat_income_multiplier
+        description: "Multiplier used to remove VAT/store-fee effects during repricing."
+      - name: event_source
+        description: "Source system that produced or validated the staged transaction."
+
+
+  - name: stg_subscription_event_context
+    description: >
+      Event-level activation context for subscription transactions, keyed by
+      (`app_name`, `transaction_id`). Built from paid and trial activation feeds and
+      enriched with the matching session id. Used to fill client/session/device fields in
+      `silver__subscription_table`.
+    columns:
+      - name: app_name
+        description: "Application name."
+      - name: event_time
+        description: "Timestamp of the activation event that provided the context."
+      - name: transaction_id
+        description: "Transaction identifier used to attach context to subscription transactions."
+      - name: client_id
+        description: "Client identifier from the activation event."
+      - name: trigger_name
+        description: "Activation event name."
+      - name: app_version
+        description: "App version observed on the activation event."
+      - name: session_number
+        description: "Session ordinal from the activation event."
+      - name: session_id
+        description: "Session identifier matched from stg_user_sessions by app/client/event_time."
+      - name: country
+        description: "Country from the activation event."
+      - name: device_name
+        description: "Device name from the activation event."
+      - name: device_version
+        description: "Device version from the activation event."
+      - name: media_source
+        description: "Attribution media source placeholder. Currently null by design in this model."
+      - name: creative
+        description: "Creative/ad placeholder. Currently null by design in this model."
+      - name: promo_campaign
+        description: "Promo campaign placeholder. Currently null by design in this model."
+
+
+  - name: stg_user_sessions
+    description: >
+      Session-boundary table built from `bronze.SessionEvent`. One row represents one
+      session identified by (`app_name`, `client_id`, `session_id`) and stores session
+      timing, duration, event counts, and last-known app/device metadata. This model is
+      reused across in-app, subscription, and cohort pipelines.
+    columns:
+      - name: app_name
+        description: "Application name from session events."
+      - name: client_id
+        description: "Client identifier from session events."
+      - name: session_id
+        description: "Session identifier."
+      - name: session_number
+        description: "Session ordinal from the raw event stream."
+      - name: session_start
+        description: "Timestamp of the first event in the session."
+      - name: session_end
+        description: "Timestamp of the last event in the session."
+      - name: session_duration_seconds
+        description: "Session duration in seconds (`session_end - session_start`)."
+      - name: session_event_count
+        description: "Number of raw SessionEvent rows inside the session."
+      - name: first_event_name
+        description: "Name of the first event in the session."
+      - name: last_event_name
+        description: "Name of the last event in the session."
+      - name: app_version
+        description: "Latest app version observed in the session."
+      - name: country
+        description: "Latest country observed in the session."
+      - name: device_name
+        description: "Latest device name observed in the session."
+      - name: device_version
+        description: "Latest device version observed in the session."
+
+
+  - name: stg_axon_campaigns
+    description: "Normalized Axon campaign snapshots with scalar payload fields and raw nested JSON blocks."
+    columns:
+      - name: account_id
+      - name: snapshot_date
+      - name: snapshot_ts
+      - name: campaign_id
+      - name: goal_type
+        description: "Optimization goal discriminator extracted from payload.goal.goal_type."
+      - name: goal_country_values_raw
+        description: "Raw JSON object with country-specific goal values."
+      - name: budget_country_values_raw
+        description: "Raw JSON object with country-specific daily budgets."

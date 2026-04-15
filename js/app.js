@@ -361,20 +361,66 @@ function renderTableDetail(t) {
     html += `</div>`;
   }
 
+  // Model metadata (gold tables with derivations)
+  const hasDeriv = t.column_derivations && Object.keys(t.column_derivations).length > 0;
+  if (t.model_meta) {
+    html += `<div class="model-meta-section">`;
+    html += `<h3>dbt Model</h3>`;
+    html += `<div class="model-meta-grid">`;
+    if (t.model_meta._model) {
+      html += `<div class="model-meta-item"><span class="model-meta-label">Model file</span><span class="model-meta-value">${escHtml(t.model_meta._model)}</span></div>`;
+    }
+    if (t.model_meta._sources && t.model_meta._sources.length) {
+      html += `<div class="model-meta-item"><span class="model-meta-label">Sources</span><span class="model-meta-value">${t.model_meta._sources.map(s => escHtml(s)).join(', ')}</span></div>`;
+    }
+    if (t.model_meta._join_strategy) {
+      html += `<div class="model-meta-item full-width"><span class="model-meta-label">Join strategy</span><span class="model-meta-value">${escHtml(t.model_meta._join_strategy)}</span></div>`;
+    }
+    html += `</div></div>`;
+  }
+
   // Schema table
   html += `<div class="schema-section">
     <h3>Schema (${t.columns.length} columns)</h3>
     <table class="schema-table">
-    <thead><tr><th>#</th><th>Column</th><th>Type</th><th>Comment</th></tr></thead>
+    <thead><tr><th>#</th><th>Column</th><th>Type</th>${hasDeriv ? '<th>Source</th><th>Derivation</th>' : '<th>Comment</th>'}</tr></thead>
     <tbody>`;
 
   t.columns.forEach((col, i) => {
+    const d = hasDeriv ? (t.column_derivations[col.name] || null) : null;
     html += `<tr>
       <td class="col-num">${i + 1}</td>
       <td class="col-name">${escHtml(col.name)}</td>
-      <td class="col-type">${escHtml(col.type)}</td>
-      <td class="col-comment">${escHtml(col.comment)}</td>
-    </tr>`;
+      <td class="col-type">${escHtml(col.type)}</td>`;
+
+    if (hasDeriv) {
+      if (d) {
+        html += `<td class="col-source">${escHtml(d.source || '')}</td>`;
+        html += `<td class="col-derivation">`;
+        if (d.formula && d.formula !== 'pass-through') {
+          html += `<code class="deriv-formula">${escHtml(d.formula)}</code>`;
+        } else if (d.formula === 'pass-through') {
+          html += `<span class="deriv-passthrough">pass-through</span>`;
+        }
+        if (d.via_cte) {
+          html += `<span class="deriv-cte" title="Via CTE">${escHtml(d.via_cte)}</span>`;
+        }
+        if (d.aggregation) {
+          html += `<span class="deriv-agg" title="Aggregation">${escHtml(d.aggregation)}</span>`;
+        }
+        if (d.notes) {
+          html += `<span class="deriv-note">${escHtml(d.notes)}</span>`;
+        }
+        html += `</td>`;
+      } else {
+        html += `<td class="col-source text-muted">—</td>`;
+        html += `<td class="col-derivation text-muted">—</td>`;
+      }
+    } else {
+      html += `<td class="col-comment">${escHtml(col.comment)}</td>`;
+    }
+
+    html += `</tr>`;
   });
 
   html += `</tbody></table></div>`;
