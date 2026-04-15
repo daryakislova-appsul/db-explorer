@@ -33,7 +33,8 @@ jobs:
       - name: Install dependencies
         run: pip install clickhouse-connect
 
-      - name: Generate schema data
+      - name: Refresh schema from ClickHouse (best-effort)
+        continue-on-error: true
         env:
           CH_PASSWORD: ${{ secrets.CH_PASSWORD }}
           CH_HOST: ${{ vars.CH_HOST || 'w9g34itw1t.us-east-1.aws.clickhouse.cloud' }}
