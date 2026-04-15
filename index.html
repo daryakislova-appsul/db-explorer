@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DB Explorer | AppsYouLove Data Catalog</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#0d1117',
+        primaryColor: '#21262d',
+        primaryTextColor: '#e6edf3',
+        primaryBorderColor: '#30363d',
+        lineColor: '#8b949e',
+        secondaryColor: '#161b22',
+        tertiaryColor: '#30363d'
+      },
+      flowchart: { curve: 'basis', padding: 15 },
+      securityLevel: 'loose'
+    });
+  </script>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-logo" onclick="goHome()" style="cursor:pointer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <ellipse cx="12" cy="6" rx="8" ry="3"/>
+        <path d="M4 6v6c0 1.657 3.582 3 8 3s8-1.343 8-3V6"/>
+        <path d="M4 12v6c0 1.657 3.582 3 8 3s8-1.343 8-3v-6"/>
+      </svg>
+      DB Explorer
+    </div>
+
+    <div class="topbar-search">
+      <span class="search-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04Z"/>
+        </svg>
+      </span>
+      <input type="text" id="search-input" placeholder="Search tables, columns, types..." autocomplete="off">
+      <span class="search-shortcut">Ctrl+K</span>
+    </div>
+
+    <div class="topbar-stats" id="topbar-stats"></div>
+  </header>
+
+  <!-- Layout -->
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar-content"></nav>
+
+    <!-- Main Content -->
+    <main class="main" id="main-content">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">
+        Loading schema data...
+      </div>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

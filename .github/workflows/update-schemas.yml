@@ -1,0 +1,56 @@
+name: Update DB Schemas & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 7 AM UTC
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install clickhouse-connect
+
+      - name: Generate schema data
+        env:
+          CH_PASSWORD: ${{ secrets.CH_PASSWORD }}
+          CH_HOST: ${{ vars.CH_HOST || 'w9g34itw1t.us-east-1.aws.clickhouse.cloud' }}
+        run: python scripts/generate_data.py
+
+      - name: Commit updated schema (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/schema.json
+          git diff --cached --quiet || git commit -m "chore: update schema snapshot [skip ci]"
+          git push || true
+
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

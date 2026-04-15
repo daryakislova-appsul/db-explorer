@@ -1,0 +1,350 @@
+{
+  "gold.ua_user_lifetime_activity_daily": {
+    "purpose": "Main fact table for LTV prediction. Grain: (client_id, application, day_idx). Partitioned by toYYYYMM(event_date).",
+    "time_col": "day_idx (pre-computed calendar-day offset from install)",
+    "lineage": "Built from 4 silver CTEs: activity_daily, inapp_daily, subscription_daily, ad_revenue_daily. User lifetime via ASOF JOIN on silver.users_scd2.",
+    "lineage_upstream": ["silver.user_activity_daily", "silver.inapp_table", "silver.subscription_table", "silver.applovin_ad_user_daily", "silver.users_scd2"],
+    "lineage_downstream": ["gold.ltv360d_correlation_sample"],
+    "tags": ["FACT", "INCREMENTAL"],
+    "revenue": "total_revenue_net = inapp_revenue_net + subs_revenue_net + ad_revenue_gross",
+    "notes": [
+      "day_idx = dateDiff('day', toDate(install_time), event_date). Calendar-day based.",
+      "user_lifetime_id = app_name|client_id|install_time. Multiple lifetimes per user (reinstalls).",
+      "Columns added April 2026: install_time, install_device_name, install_device_type."
+    ]
+  },
+  "gold.ua_user_lifetime_activity_24h": {
+    "purpose": "Same grain as daily but restricted to 24-hour install window metrics.",
+    "tags": ["FACT"]
+  },
+  "gold.monetization_curves": {
+    "purpose": "Cohort monetization curves \u2014 revenue accumulation over time by cohort.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_users": {
+    "purpose": "User-level cohort attributes for cohort analysis.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_wide": {
+    "purpose": "Wide pivoted cohort metrics with columns for d0/1/2/3/7/14/30/180/360.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_long": {
+    "purpose": "Long format cohort metrics \u2014 same data as ua_cohort_wide but tall format.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_report": {
+    "purpose": "Aggregated cohort report for dashboards and BI.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_ad_24h_user": {
+    "purpose": "DEPRECATED \u2014 replaced by silver.applovin_ad_user_daily.",
+    "tags": ["DEPRECATED"],
+    "notes": ["Replaced by silver.applovin_ad_user_daily."]
+  },
+  "gold.ua_cohort_ad_24h_long": {
+    "purpose": "Long-format ad metrics in first 24h per cohort.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ltv360d_correlation_sample": {
+    "purpose": "Pre-built LTV correlation sample (178 features) for ML feature analysis.",
+    "lineage_upstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["ANALYTICAL", "ML"]
+  },
+  "gold.ua_payers": {
+    "purpose": "Lifetime payer flags \u2014 identifies payers and their characteristics.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.subscription_purchases": {
+    "purpose": "Subscription purchase records. WARNING: price field is BROKEN.",
+    "tags": ["BROKEN"],
+    "notes": ["Price field is BROKEN \u2014 do not use for revenue calculations."]
+  },
+  "gold.ua_cohort_activity_utn": {
+    "purpose": "Cohort activity metrics by UTN (user type/network).",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_targets_vs_fact": {
+    "purpose": "UA cohort targets vs actual performance comparison.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.ua_cohort_targets_vs_fact_matched": {
+    "purpose": "Matched version of targets-vs-fact for aligned comparison.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.app_revenue_by_source_daily": {
+    "purpose": "Daily app revenue by source (ad, inapp, subs).",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.app_revenue_compare_daily": {
+    "purpose": "Daily revenue comparison: AppsYouLove vs Magify vs Apple vs Adjust vs AppLovin.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.applovin_ads_sources_comparison": {
+    "purpose": "Ad revenue comparison between AppLovin sources by geo/format.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.inapps_revenue_sources_comparison": {
+    "purpose": "In-app revenue comparison across data sources.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.sources_comparison": {
+    "purpose": "General revenue source comparison.",
+    "tags": ["ANALYTICAL"]
+  },
+  "gold.user_level_cohort_data_model": {
+    "purpose": "User-level cohort data model for dashboards.",
+    "tags": ["ANALYTICAL"]
+  },
+
+  "silver.users_scd2": {
+    "purpose": "SCD2 slowly-changing dimension for user lifecycles. Contains install_time, media_source, lifetime boundaries.",
+    "lineage": "From bronze.ADJUSTInstallsStoreStore + ADJUSTReInstallsStoreStore. install_time via parseDateTimeBestEffortOrNull().",
+    "lineage_upstream": ["bronze.ADJUSTInstallsStoreStore", "bronze.ADJUSTReInstallsStoreStore"],
+    "lineage_downstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["DIMENSION", "SCD2"]
+  },
+  "silver.users": {
+    "purpose": "User attributes (46 columns). Was reportedly deleted April 7 but exists \u2014 may have been recreated.",
+    "tags": ["DIMENSION"],
+    "notes": ["Was reportedly deleted April 7, 2026 but exists \u2014 may have been recreated."]
+  },
+  "silver.applovin_ad_user_daily": {
+    "purpose": "Ad revenue by user/day/ad_type. Replaces deprecated gold.ua_cohort_ad_24h_user.",
+    "lineage_upstream": ["silver.applovin_ad_revenue_daily"],
+    "lineage_downstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["AGGREGATION"]
+  },
+  "silver.applovin_ad_revenue_daily": {
+    "purpose": "Daily AppLovin ad revenue aggregation.",
+    "lineage_upstream": ["bronze.applovin_impression_data"],
+    "lineage_downstream": ["silver.applovin_ad_user_daily"],
+    "tags": ["AGGREGATION"]
+  },
+  "silver.subscription_table": {
+    "purpose": "Full subscription lifecycle: RENEWAL, INITIAL_PURCHASE, TRIAL, CANCELLATION. Multi-source priority.",
+    "lineage_upstream": ["silver.stg_subscription_transactions", "silver.stg_subscription_event_context"],
+    "lineage_downstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["DETAIL"]
+  },
+  "silver.inapp_table": {
+    "purpose": "Validated in-app purchases with net USD price. Purchases + refunds combined.",
+    "lineage_upstream": ["silver.stg_inapp_purchases", "silver.stg_inapp_refunds"],
+    "lineage_downstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["DETAIL"]
+  },
+  "silver.user_activity_daily": {
+    "purpose": "Daily user activity: sessions_count, duration, event_count.",
+    "lineage_upstream": ["silver.user_sessions"],
+    "lineage_downstream": ["gold.ua_user_lifetime_activity_daily"],
+    "tags": ["AGGREGATION"]
+  },
+  "silver.user_sessions": {
+    "purpose": "View on stg_user_sessions \u2014 session boundaries from raw events.",
+    "lineage_upstream": ["silver.stg_user_sessions"],
+    "lineage_downstream": ["silver.user_activity_daily"],
+    "tags": ["VIEW"]
+  },
+  "silver.user_active_days": {
+    "purpose": "Daily active user flags.",
+    "tags": ["AGGREGATION"]
+  },
+  "silver.ua_costs": {
+    "purpose": "UA spend by channel/campaign.",
+    "tags": ["ANALYTICAL"]
+  },
+  "silver.magify_payments_events": {
+    "purpose": "Unified payment events. UNRELIABLE \u2014 intermediate table with duplicates.",
+    "tags": ["DETAIL"],
+    "notes": ["UNRELIABLE \u2014 intermediate table with duplicates."]
+  },
+  "silver.currency_rates_scd2": {
+    "purpose": "SCD2 exchange rates (base USD). Used in calc_price_usd macro.",
+    "tags": ["DIMENSION", "SCD2"]
+  },
+  "silver.adjust_sessions_first_seen": {
+    "purpose": "First session per user from Adjust attribution data.",
+    "tags": ["DIMENSION"]
+  },
+  "silver.application_platform_mapping": {
+    "purpose": "Lookup: application names to platforms (~104 rows).",
+    "tags": ["LOOKUP"]
+  },
+  "silver.country_name_to_iso2": {
+    "purpose": "Lookup: country names to ISO-2 codes (~281 rows).",
+    "tags": ["LOOKUP"]
+  },
+  "silver.cohort_event_windows": {
+    "purpose": "Lookup: event time windows for cohort analysis (~141 rows).",
+    "tags": ["LOOKUP"]
+  },
+  "silver.product_id_data_model": {
+    "purpose": "Product ID reference: product types, prices, durations.",
+    "tags": ["LOOKUP"]
+  },
+  "silver.stg_user_sessions": {
+    "purpose": "Staging: session boundaries from SessionEventStore, grouped by session_id.",
+    "lineage_upstream": ["bronze.SessionEventStore"],
+    "lineage_downstream": ["silver.user_sessions"],
+    "tags": ["STAGING"]
+  },
+  "silver.stg_inapp_purchases": {
+    "purpose": "Staging: validated IAPs (validator_matched=1). Validated via ReceiptData (iOS) / ProductPurchase (Android).",
+    "lineage_upstream": ["bronze.inAppsStore", "bronze.ReceiptDataStore", "bronze.ProductPurchaseStore"],
+    "lineage_downstream": ["silver.inapp_table"],
+    "tags": ["STAGING"]
+  },
+  "silver.stg_inapp_refunds": {
+    "purpose": "Staging: IAP refunds from ProductPurchaseStore.purchaseState=101 + AppleS2S.notification_type=REFUND.",
+    "lineage_upstream": ["bronze.ProductPurchaseStore", "bronze.AppleS2SNotificationsStore"],
+    "lineage_downstream": ["silver.inapp_table"],
+    "tags": ["STAGING"]
+  },
+  "silver.stg_subscription_transactions": {
+    "purpose": "Staging: subscription transactions with multi-source priority (RevenueCat > AppleS2S > SubscriptionPurchase).",
+    "lineage_upstream": ["bronze.RevenueCatStore", "bronze.AppleS2SNotificationsStore", "bronze.SubscriptionPurchaseStore"],
+    "lineage_downstream": ["silver.subscription_table"],
+    "tags": ["STAGING"]
+  },
+  "silver.stg_subscription_event_context": {
+    "purpose": "Staging: enrichment context for subscription events.",
+    "lineage_downstream": ["silver.subscription_table"],
+    "tags": ["STAGING"]
+  },
+
+  "bronze.SessionEventStore": {
+    "purpose": "Individual user events (29+ types). Main source for session and activity pipelines.",
+    "time_col": "version (server receive time)",
+    "time_warn": "Do NOT use timestamp (client SDK time \u2014 unreliable, wild dates).",
+    "lineage_downstream": ["silver.stg_user_sessions"],
+    "tags": ["RAW", "EVENTS"]
+  },
+  "bronze.session_event": {
+    "purpose": "Snake_case alias of SessionEventStore.",
+    "time_col": "version",
+    "tags": ["ALIAS"]
+  },
+  "bronze.TransactionStore": {
+    "purpose": "In-game economy transactions: spend (3.64B), receive from default/Ad/level/Bonus/reward/shop/quest.",
+    "time_col": "version (server receive time)",
+    "time_warn": "Do NOT use timestamp.",
+    "tags": ["RAW", "EVENTS"]
+  },
+  "bronze.transaction": {
+    "purpose": "Snake_case alias of TransactionStore.",
+    "time_col": "version",
+    "tags": ["ALIAS"]
+  },
+  "bronze.StartEndSessionStore": {
+    "purpose": "Per-session open/close timestamps. NOT used in dbt pipeline \u2014 useful for independent duration stats.",
+    "time_col": "opening_timestamp (verified clean)",
+    "time_warn": "Do NOT use version \u2014 it's a row-version for dedup, NOT a time field.",
+    "tags": ["RAW", "SESSIONS"],
+    "notes": ["NOT used in the dbt pipeline. SessionEventStore feeds sessions.", "Data starts from 2024-03-24."]
+  },
+  "bronze.start_end_session": {
+    "purpose": "Snake_case alias of StartEndSessionStore.",
+    "time_col": "opening_timestamp",
+    "time_warn": "version is NOT a time field here.",
+    "tags": ["ALIAS"]
+  },
+  "bronze.ApplovinAdsImpressionStore": {
+    "purpose": "AppLovin ad impression data (detailed). Primary source for ad revenue pipeline.",
+    "time_col": "version",
+    "lineage_downstream": ["silver.applovin_ad_revenue_daily"],
+    "tags": ["RAW", "ADS"]
+  },
+  "bronze.applovin_impression_data": {
+    "purpose": "AppLovin impression data \u2014 used in dbt pipeline for ad revenue.",
+    "time_col": "version",
+    "lineage_downstream": ["silver.applovin_ad_revenue_daily"],
+    "tags": ["RAW", "ADS"]
+  },
+  "bronze.ADJUSTInstallsStoreStore": {
+    "purpose": "Install attribution from Adjust MMP. Primary source for user lifecycle.",
+    "time_col": "version",
+    "lineage_downstream": ["silver.users_scd2"],
+    "tags": ["RAW", "ATTRIBUTION"]
+  },
+  "bronze.ADJUSTReInstallsStoreStore": {
+    "purpose": "Reinstall events from Adjust. Used with InstallsStore to build user lifecycles.",
+    "time_col": "version",
+    "lineage_downstream": ["silver.users_scd2"],
+    "tags": ["RAW", "ATTRIBUTION"]
+  },
+  "bronze.inAppsStore": {
+    "purpose": "In-app purchases (56 fields). Primary IAP source. Revenue = price / currencyRatesDenominator * vatIncomeMultiplier.",
+    "time_col": "version",
+    "lineage_downstream": ["silver.stg_inapp_purchases"],
+    "tags": ["RAW", "PURCHASES"],
+    "revenue": "price / currencyRatesDenominator * vatIncomeMultiplier = net USD"
+  },
+  "bronze.in_apps": {
+    "purpose": "Snake_case alias of inAppsStore.",
+    "time_col": "version",
+    "tags": ["ALIAS"]
+  },
+  "bronze.ProductPurchaseStore": {
+    "purpose": "Google Play IAP receipts. Used for validation. purchaseState=101 = refund.",
+    "time_col": "purchaseTimeMillis",
+    "lineage_downstream": ["silver.stg_inapp_purchases", "silver.stg_inapp_refunds"],
+    "tags": ["RAW", "PURCHASES"],
+    "revenue": "priceAmountMicros / 1,000,000 -> local currency"
+  },
+  "bronze.ReceiptDataStore": {
+    "purpose": "iOS purchase receipt data for validation.",
+    "lineage_downstream": ["silver.stg_inapp_purchases"],
+    "tags": ["RAW", "PURCHASES"]
+  },
+  "bronze.RevenueCatStore": {
+    "purpose": "Subscription events from RevenueCat (both platforms). Priority 1 source for subs pipeline.",
+    "time_col": "purchased_at_ms",
+    "lineage_downstream": ["silver.stg_subscription_transactions"],
+    "tags": ["RAW", "SUBS"],
+    "revenue": "price * takehome_percentage (price already USD)",
+    "notes": ["Partial refund detection only: cancel_reason='CUSTOMER_SUPPORT'."]
+  },
+  "bronze.AppleS2SNotificationsStore": {
+    "purpose": "iOS S2S purchase/subscription notifications. Priority 2 for subs pipeline.",
+    "time_col": "purchase_date_ms",
+    "lineage_downstream": ["silver.stg_subscription_transactions", "silver.stg_inapp_refunds"],
+    "tags": ["RAW", "SUBS"],
+    "revenue": "price / 1,000 -> local currency",
+    "notes": ["Refund: notification_type='REFUND' OR status=5."]
+  },
+  "bronze.SubscriptionPurchaseStore": {
+    "purpose": "Google Play subscription purchases. Priority 3 for subs pipeline.",
+    "time_col": "purchaseTimeMillis",
+    "lineage_downstream": ["silver.stg_subscription_transactions"],
+    "tags": ["RAW", "SUBS"],
+    "notes": ["cancelReason=101 = refund."]
+  },
+  "bronze.ImpressionStore": {
+    "purpose": "Raw ad impressions from all sources.",
+    "time_col": "version",
+    "tags": ["RAW", "ADS"]
+  },
+  "bronze.ClickStore": {
+    "purpose": "Ad click events.",
+    "time_col": "version",
+    "tags": ["RAW", "ADS"]
+  },
+  "bronze.AppLaunchStore": {
+    "purpose": "App launch events.",
+    "time_col": "version",
+    "tags": ["RAW", "EVENTS"]
+  },
+  "bronze.CurrencyRatesStore": {
+    "purpose": "Currency exchange rates \u2014 feeds silver.currency_rates_scd2.",
+    "lineage_downstream": ["silver.currency_rates_scd2"],
+    "tags": ["RAW", "REFERENCE"]
+  },
+  "bronze.OrganizationInfoStore": {
+    "purpose": "Organization info \u2014 provides vatIncomeMultiplier for USD conversion.",
+    "tags": ["RAW", "REFERENCE"]
+  },
+  "bronze.VatStore": {
+    "purpose": "VAT rates by country for vatIncomeMultiplier calculation.",
+    "tags": ["RAW", "REFERENCE"]
+  }
+}
